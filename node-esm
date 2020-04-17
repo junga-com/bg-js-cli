@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+# requires bash
+# requires awk (any implementation should be fine)
+
+function assertError() {
+	echo "$@" >&2
+	exit 1
+}
+
+function addToNodePath() {
+	local newPath="$1"
+	[[ "$NODE_PATH" =~ (^|:)${newPath}(:|$) ]] || export NODE_PATH+="${NODE_PATH:+:}${newPath}"
+}
+
+addToNodePath /usr/lib/node_modules
+
+
+which node &>/dev/null || assertError "The executable file 'node' was not found. Do you need to install node?"
+
+# test the node capabilities by looking for --input-type and --experimental-modules
+IFS=$'\b' read -r supportsInputType  requiresExpMods < <(
+	node --help 2>/dev/null | awk '
+		# inOptsSect will be true only inside the Options: section 
+		/^[^-[:space:]][^:]*:[[:space:]]*$/ {inOptsSect=0}
+		/^Options:/ {inOptsSect=1}
+
+		# if --input-type is one of the options 
+		inOptsSect && /^[[:space:]]*--input-type/ {supportsInputType="--input-type=module"}
+
+		# not sure about this. As of time of writing this (2020-04) we need --experimental-modules but not sure if
+		# it will still be an option after its not needed
+		inOptsSect && /^[[:space:]]*--experimental-modules/ {requiresExpMods="--experimental-modules"}
+
+		END {printf("%s\b%s\n", supportsInputType,  requiresExpMods)}
+	'
+)
+
+
+if false && [ "$supportsInputType" ]; then
+	[ $# -eq 0 ] && supportsInputType=
+	opts=()
+	while [ $# -gt 0 ]; do case "$1" in
+		-i) opts+=("$1"); supportsInputType=; ;;
+		-*) opts+=("$1") ;;
+		*)  if [ -f "$1" ]; then
+				break;
+			else
+				opts+=("$1");
+			fi
+	esac; shift; done;
+	if [ "$1" ]; then
+		node $supportsInputType $requiresExpMods "${opts[@]}" "${@:2}" < "$1"
+	else
+		node $supportsInputType $requiresExpMods "${opts[@]}" "${@:2}"
+	fi
+else
+	node -r esm "$@"
+fi

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+function addToNodePath() {
+	local newPath="$1"
+    [[ "$NODE_PATH" =~ (^|:)${newPath}(:|$) ]] || export NODE_PATH+="${NODE_PATH:+:}${newPath}"
+}
+
+addToNodePath /usr/lib/node_modules
+
+%elRealPath% "$@"

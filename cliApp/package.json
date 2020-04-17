@@ -1,0 +1,5 @@
+{
+  "name": "electronCli",
+  "productName": "Electron Cli",
+  "main": "loaderMain.js"
+}

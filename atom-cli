@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+function addToNodePath() {
+	local newPath="$1"
+	[[ "$NODE_PATH" =~ (^|:)${newPath}(:|$) ]] || export NODE_PATH+="${NODE_PATH:+:}${newPath}"
+}
+
+addToNodePath /usr/lib/node_modules
+addToNodePath /usr/share/atom/resources/app.asar/exports
+
+# these are just part of the bootstrap. maybe its better to cd for that part
+addToNodePath /usr/share/atom/resources/app.asar/src
+addToNodePath /usr/share/atom/resources/app.asar/src/main-process
+
+/usr/share/atom-cli/electron -r esm --atom-environment "$@"
