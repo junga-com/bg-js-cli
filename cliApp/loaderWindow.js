@@ -2,6 +2,7 @@ const tty = require('tty');
 const fs = require('fs');
 const Module = require('module')
 
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Process command line.
 const option = {modules:[]};
@@ -26,23 +27,20 @@ var extraPaths = (process.env.NODE_PATH || '').split(':');
 Module.globalPaths.push(...extraPaths);
 
 // Set up preload modules
+// using Module._preloadModules in renderer caused a weird module not found error for an @electron/internal.. module even though it
+// exists. It seems that esm only hooks into the existing require function when its called with _preloadModules so we detect if esm
+// is being preloaded so that we can use its loader explicitly to load the user script if specified.
+let usingESM;
 for (const moduleName of option.modules) {
-	require(moduleName);
-	// Module._preloadModules in renderer caused a weird module not found error for an @electron/internal.. mod that exists
-	//Module._preloadModules(option.modules)
+	if (moduleName == 'esm')
+		usingESM = true;
+	Module._load(moduleName, module, true)
 }
 
 // initialize the atom environment if called for
 if (option.atomEnvironment) {
 	const AtomEnvironment = require('atom-environment');
 	window.atom = new AtomEnvironment();
-	// const ApplicationDelegate = require('application-delegate');
-	// global.atom = new AtomEnvironment({
-	//   applicationDelegate: new ApplicationDelegate(),
-	//   enablePersistence: false
-	// });
-
-	//require('initialize-application-window.js')
 }
 
 
@@ -133,5 +131,10 @@ global, module, require, ... : the standard node environment
 
 // load the user provided jsmodule if provided
 if (option.scriptName) {
-	require(option.scriptName)
+	// when -r esm is loaded with Module._preloadModules, an extensionless script can have esm syntaxt but for some reason _preloadModules
+	// gets a cant find module error when used in the renderer process. 
+	if (usingESM)
+		require('esm')(module)(option.scriptName)
+	else
+		Module._load(option.scriptName, module, true)
 }

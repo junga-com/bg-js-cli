@@ -18,6 +18,7 @@ While installed, the electron default_app will be modified to support different 
 
 
 ## Electron features
+* adds electron-esm that allows executing an extensionless js script command as an esm module with a #!/usr/lib/env electon-esm shebang on any supported platform
 * honor the NODE_PATH environment variable. On slack, someone suggested without explanation that electron does not honor NODE_PATH because the host's environment should not change how the electron application runs, but I do not understand why this is necessary. It seems to me that if an electron application bundles all of its dependencies in the typical way by listing them in package.json and using npm to install them into node_modules sub-folder, that NODE_PATH will never come into play. Only if the application attempts to require/import a module that is not a dependency would NODE_PATH come into play. My use-case for NODE_PATH is to provide single file electron commands distrubuted via an OS package manager like rpm or deb that relies on host installed node_modules of a particular version managed by the host OS package system.
 * /usr/lib/node_modues is in the NODE_PATH by default
 * support the --win and --url options which create a BrowserWindow to run a jsmodule in and load a htmlcontent is. Either or both can be specified.
@@ -25,7 +26,9 @@ While installed, the electron default_app will be modified to support different 
 * -i | --interactive | --repl can be used in conjunction which launching a user electon application so that the launching terminal can be used to interact with the application for experimenting or debugging.
 
 ## Atom Features
-atom-cli is a command that runs js files similar to node but with some of the atom environment. It was created to allow running simple unit tests and examples for js modules meant to be used inside atom packages.
+* adds atom-cli, a command that runs js files similar to node but with some of the atom environment. It was created to allow running simple unit tests and examples for js modules meant to be used inside atom packages.
+
+It does this my looking at the electronVersion in /usr/share/atom/package.json, downloading that version into /usr/share/atom-cli and  replacing its default_app. It will work the same as the modified global electron described above except 1) its the version compatible with the installed atom, 2) it has the installed atom app in the NODE_PATH so that modules from it can be loaded and 3) the 'atom' global is created (although not all of its features will work)
 
 ## Features
 

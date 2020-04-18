@@ -1,0 +1,4 @@
+{
+  "name": "bg-js-cli",
+  "bin": "./install.sh"
+}

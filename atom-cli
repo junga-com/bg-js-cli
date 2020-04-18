@@ -12,4 +12,4 @@ addToNodePath /usr/share/atom/resources/app.asar/exports
 addToNodePath /usr/share/atom/resources/app.asar/src
 addToNodePath /usr/share/atom/resources/app.asar/src/main-process
 
-/usr/share/atom-cli/electron -r esm --atom-environment "$@"
+/usr/share/atom-cli/electron -r esm --hide-win --default-code-type=win --atom-environment "$@"

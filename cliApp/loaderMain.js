@@ -4,6 +4,8 @@ const fs =     require('fs')
 const Module = require('module')
 const path =   require('path')
 const url =    require('url')
+const assert = require('assert')
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Local Functions
@@ -18,15 +20,14 @@ function NormFilenameToURL(...pathParts) {
 }
 
 // This determines if <filename> is html content that should be loaded into the BrowserWindow or a js module that should be imported
-// It returns an array with the normalized <filename> either in the first element if its a js module or the second if its content.
-// Usage: [option.appCode, option.winContent]
-function NormInputFile(filename) {
+// It returns the normalize url if it is and returns undefined if it is not.
+function IsHTMLContent(filename) {
   if (/^(http:|https:|file:|chrome:)$/.test(url.parse(filename).protocol))
-    return [,filename];
+    return filename;
   if (/^(.htm|.html)$/.test(path.extname(filename)))
-    return [,NormFilenameToURL(filename)];
+    return NormFilenameToURL(filename);
   else
-    return [filename,];
+    return undefined;
 }
 
 // Show an error in a GUI dialog bog
@@ -37,9 +38,8 @@ function showErrorMessage(message) {
 }
 
 
-// This will replace the information about the default app with the information about the user app and launch the user app
-// Electron has already launched the default app (which is this code) but the command line indicates a user application to launch
-function startUserSuppliedApplication(packagePath) {
+// This will replace the information about the default app with the information about the user app that was specified on the cmdline
+function setAppInfoForUserSpecifiedJSModule(packagePath) {
   // Add a flag indicating app is started from default app.
   Object.defineProperty(process, 'defaultApp', {
     configurable: false,
@@ -47,50 +47,42 @@ function startUserSuppliedApplication(packagePath) {
     value: true
   })
 
-  try {
-    // Override app name and version.
-    packagePath = path.resolve(packagePath)
-    const packageJsonPath = path.join(packagePath, 'package.json')
-    let appPath
-    if (fs.existsSync(packageJsonPath)) {
-      let packageJson
-      try {
-        packageJson = require(packageJsonPath)
-      } catch (e) {
-        showErrorMessage(`Unable to parse ${packageJsonPath}\n\n${e.message}`)
-        return
-      }
-
-      if (packageJson.version) {
-        app.setVersion(packageJson.version)
-      }
-      if (packageJson.productName) {
-        app.setName(packageJson.productName)
-      } else if (packageJson.name) {
-        app.setName(packageJson.name)
-      }
-      app.setPath('userData', path.join(app.getPath('appData'), app.getName()))
-      app.setPath('userCache', path.join(app.getPath('cache'), app.getName()))
-      appPath = packagePath
-    }
-
+  // Override app name and version.
+  packagePath = path.resolve(packagePath)
+  const packageJsonPath = path.join(packagePath, 'package.json')
+  let appPath
+  if (fs.existsSync(packageJsonPath)) {
+    let packageJson
     try {
-      const filePath = Module._resolveFilename(packagePath, module, true)
-      app.setAppPath(appPath || path.dirname(filePath))
+      packageJson = require(packageJsonPath)
     } catch (e) {
-      showErrorMessage(`Unable to find Electron app at ${packagePath}\n\n${e.message}`)
+      showErrorMessage(`Unable to parse ${packageJsonPath}\n\n${e.message}`)
       return
     }
 
-    // Run the app.
-    Module._load(packagePath, module, true)
-  } catch (e) {
-    console.error('App threw an error during load')
-    console.error(e.stack || e)
-    throw e
+    if (packageJson.version) {
+      app.setVersion(packageJson.version)
+    }
+    if (packageJson.productName) {
+      app.setName(packageJson.productName)
+    } else if (packageJson.name) {
+      app.setName(packageJson.name)
+    }
+    app.setPath('userData', path.join(app.getPath('appData'), app.getName()))
+    app.setPath('userCache', path.join(app.getPath('cache'), app.getName()))
+    appPath = packagePath
   }
-}
 
+  try {
+    const filePath = Module._resolveFilename(packagePath, module, true);
+    appPath = appPath || path.dirname(filePath);
+    app.setAppPath(appPath);
+  } catch (e) {
+    showErrorMessage(`Unable to find Electron app at ${packagePath}\n\n${e.message}`)
+    return
+  }
+  return packagePath
+}
 
 // createWindow creates a BrowserWindow from information specified on the command line.
 // Params:
@@ -121,8 +113,16 @@ async function createWindow(renedererModule, contentHTML, params) {
       additionalArguments.push('-r='+module);
   }
 
-  if (renedererModule)
-    additionalArguments.push('--scriptName='+renedererModule);
+  if (renedererModule) {
+    try {
+      const packagePath = setAppInfoForUserSpecifiedJSModule(renedererModule);
+      additionalArguments.push('--scriptName='+packagePath);
+    } catch (e) {
+      console.error('App threw an error during load')
+      console.error(e.stack || e)
+      throw e
+    }
+  }
 
 
   if (option.atomEnvironment)
@@ -224,36 +224,39 @@ Params:
    - http://, https://, or file:// URL.
 
 Options:
--v, --version         Print the version.
--a, --abi             Print the Node ABI version.
--i, --interactive     Open a REPL to the main process.
-                      This replaces the default app so none of the options related to the
-                      window that the default app creates will have an effect.
--r, --require         Module to preload (option can be repeated).
---app <module>        Execute this module as the application (main process) entry point
-                      This replaces the default app so none of the options related to the
-                      window that the default app creates will have an effect.
---win <module>        Execute this module as the Window (renderer process) entry point 
-                      in the Window that the default app creates
---url <htmlFile>      Load this content in the Window that the default app creates
---win-interactive     Open a REPL to the renderer process of the windows that the default
-                      app creates
---hide-win            If a BrowserWindow is created, leave it hidden until user code <jsmodule> or a repl command explicitly shows it
---atom-environment    Initialize the BroswerWindow with the atom environment
+-v, --version          Print the version.
+-a, --abi              Print the Node ABI version.
+-i, --interactive      Open a REPL to the main process.
+                       This replaces the default app so none of the options related to the
+                       window that the default app creates will have an effect.
+-r, --require          Module to preload (option can be repeated).
+--app <jsmodule>       Execute this module as the application (main process) entry point
+                       This replaces the default app so none of the options related to the
+                       window that the default app creates will have an effect.
+--win <jsmodule>       Execute this module as the Window (renderer process) entry point 
+                       in the Window that the default app creates
+--url <htmlFile>       Load this content in the Window that the default app creates
+--default-code-type=win|app 
+                       When a <jsmodule> is specified on the command line without being preceeded by --win or --app this determines
+                       how it is treated. If this is not specified, the <jsmodule> is an --app which maintains compatibility with
+                       previous versions.
+--win-interactive      Open a REPL to the renderer process of the windows that the default
+                       app creates
+--hide-win             If a BrowserWindow is created, leave it hidden until user code <jsmodule> or a repl command explicitly shows it
+--show-win             Undoes the effect of --hide-win. This is useful if omething else has already put --show-win on the cmdline
+--atom-environment     Initialize the BroswerWindow with the atom environment
 `
 
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Process command line.
-const option = {
-  modules:   []
-}
 
+const option = {modules: []}
 const argv = process.argv.slice(1);
 while (argv.length > 0) {
-  const arg = argv.shift();
-  function re(regex) {return regex.test(arg) ? arg : 'NO MATCH'}
+  let arg = argv.shift(), rematch, defJSModType='app';
+  function re(regex) {rematch=regex.exec(arg); return (!!rematch) ? arg : 'NO MATCH'}
   function getOptValue() {var a=arg.split('='); return (a.length>1) ? a[1] : argv.shift();}
   switch (arg) {
     case re(/^(--help|-h)$/):                 option.help = true;                           break;
@@ -261,21 +264,32 @@ while (argv.length > 0) {
     case re(/^(--abi|-a)$/):                  option.abi = true;                            break;
     case re(/^(--require(=|$)|-r)\b/):        option.modules.push(getOptValue());           break;
     case re(/^(--interactive|-i|--repl)$/):   option.interactive = true;                    break;
+    case re(/^--default-code-type=(win|app)$/):defJSModType = rematch[1];                    break;
     case re(/^(--hide-win|-h)$/):             option.hideWin = true;                        break;
+    case re(/^(--show-win|-h)$/):             option.hideWin = false;                       break;
     case re(/^(--win-interactive)$/):         option.winInteractive = true;                 break;
     case re(/^--app\b/):                      option.appCode    = getOptValue();            break;
     case re(/^--win(=|$)/):                   option.winCode    = getOptValue();            break;
-    case re(/^--url\b/):                      [,option.winContent] = NormInputFile(getOptValue());break;
+    case re(/^--url\b/):
+      const tmp = getOptValue();
+      option.winContent = IsHTMLContent(tmp);
+      assert(!!option.winContent, `'${tmp} does not seem to be an html content url'`)
+      break;
     case re(/^(--atom-environment)$/):        option.atomEnvironment = true;                break;
-    case re(/^-/):                            process.assert(false, 'Unknown option '+arg);break;
+    case re(/^-/):                            assert(false, 'Unknown option '+arg);break;
     default:
-      const fileResult = NormInputFile(arg);
-      option.appCode    = (fileResult[0])? a[0] : option.appCode;
-      option.winContent = (fileResult[1])? a[1] : option.winContent;
+      const fileResult = IsHTMLContent(arg);
+      if (fileResult)
+        option.winContent = fileResult;
+      else if (defJSModType == 'win')
+        option.winCode = arg;
+      else
+        option.appCode = arg;
       break;
   }
 }
 
+// quiet the warning in later electrons about the default value of allowRendererProcessReuse changing
 app.allowRendererProcessReuse = false;
 
 // uncomment to debug commandline processing
@@ -320,7 +334,16 @@ if (option.version || option.abi || option.help) {
 
 // Form 1 -- Start User App and get out of its way
 } else if (option.appCode) {
-  startUserSuppliedApplication(option.appCode);
+  // Run the app.
+  try {
+    const packagePath = setAppInfoForUserSpecifiedJSModule(option.appCode);
+    Module._load(packagePath, module, true)
+  } catch (e) {
+    console.error('App threw an error during load')
+    console.error(e.stack || e)
+    throw e
+  }
+
 
 // Form 2,3,4 --  create a BrowserWindow with optional content and optional REPL in the window process
 } else {
