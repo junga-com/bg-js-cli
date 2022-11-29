@@ -64,12 +64,12 @@ function setAppInfoForUserSpecifiedJSModule(packagePath) {
       app.setVersion(packageJson.version)
     }
     if (packageJson.productName) {
-      app.setName(packageJson.productName)
+      app.name = packageJson.productName
     } else if (packageJson.name) {
-      app.setName(packageJson.name)
+      app.name = packageJson.name
     }
-    app.setPath('userData', path.join(app.getPath('appData'), app.getName()))
-    app.setPath('userCache', path.join(app.getPath('cache'), app.getName()))
+    app.setPath('userData', path.join(app.getPath('appData'), app.name))
+    app.setPath('userCache', path.join(app.getPath('cache'), app.name))
     appPath = packagePath
   }
 
@@ -156,6 +156,19 @@ async function createWindow(renedererModule, contentHTML, params) {
     useContentSize: true,
     show: false
   });
+
+  if (option.atomEnvironment) {
+    Object.defineProperty(mainWindow, 'loadSettingsJSON', {
+      get: () =>
+        JSON.stringify({
+          devMode : false,
+          safeMode : false,
+          resourcePath: "/usr/share/atom/resources/app.asar",
+          userSettings: {},
+          projectSpecification: null
+        })
+    });
+  }
 
   if (contentHTML) {
     mainWindow.loadURL(contentHTML);
@@ -254,8 +267,9 @@ Options:
 
 const option = {modules: []}
 const argv = process.argv.slice(1);
+let defJSModType='app';
 while (argv.length > 0) {
-  let arg = argv.shift(), rematch, defJSModType='app';
+  let arg = argv.shift(), rematch;
   function re(regex) {rematch=regex.exec(arg); return (!!rematch) ? arg : 'NO MATCH'}
   function getOptValue() {var a=arg.split('='); return (a.length>1) ? a[1] : argv.shift();}
   switch (arg) {
@@ -264,7 +278,7 @@ while (argv.length > 0) {
     case re(/^(--abi|-a)$/):                  option.abi = true;                            break;
     case re(/^(--require(=|$)|-r)\b/):        option.modules.push(getOptValue());           break;
     case re(/^(--interactive|-i|--repl)$/):   option.interactive = true;                    break;
-    case re(/^--default-code-type=(win|app)$/):defJSModType = rematch[1];                    break;
+    case re(/^--default-code-type=(win|app)$/):defJSModType = rematch[1];                   break;
     case re(/^(--hide-win|-h)$/):             option.hideWin = true;                        break;
     case re(/^(--show-win|-h)$/):             option.hideWin = false;                       break;
     case re(/^(--win-interactive)$/):         option.winInteractive = true;                 break;
@@ -343,7 +357,6 @@ if (option.version || option.abi || option.help) {
     console.error(e.stack || e)
     throw e
   }
-
 
 // Form 2,3,4 --  create a BrowserWindow with optional content and optional REPL in the window process
 } else {

@@ -113,6 +113,8 @@ fi
 if which electron &>/dev/null; then
 	elCmdPath="$(which electron)"
 	elRealPath='/usr/lib/node_modules/electron/cli.js'
+	[ ! -e "$elRealPath" ] && elRealPath='/usr/local/lib/node_modules/electron/cli.js'
+	[ ! -e "$elRealPath" ] && assertError "unexpected folder layout. Is this runnig on a new distro or version? looked for electron's cli.js in /usr/[local/]lib/node_modules"
 
 	# replace the electron symlink with our script that makes /usr/lib/node_modules in NODE_PATH by default
 	if [ "$uninstallFlag" ]; then
@@ -126,8 +128,10 @@ if which electron &>/dev/null; then
 		echo "replaced '$elCmdPath' symlink with our script. target='$elRealPath'"
 	fi
 
-	# install electron-esm which adds -r esm as a preload.
+	# install several versions of electron to support shebang scripts of several types.
 	installCmd electron-esm /usr/bin
+	installCmd electron-win /usr/bin
+	installCmd electron-win-esm /usr/bin
 
 	# replace the default_app with ours that adds various features including respect for NODE_PATH and being able to create a
 	# BrowserWindow directly
@@ -155,9 +159,9 @@ if which atom &>/dev/null; then
 			echo "${elVersion##*\"}"
 		)"
 		[[ "$elVersion" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] || assertError "expected 1.2.3 style version number but got '${elVersion}'"
-		echo "found that atom is using electron-${elVersion}" 
+		echo "found that atom is using electron-${elVersion}"
 
-		# download the zip file for this version 
+		# download the zip file for this version
 		os="linux"  # TODO: detect
 		arch="x64"  # TODO: detect
 		dlFrom="https://github.com/electron/electron/releases/download/v${elVersion}/electron-v${elVersion}-${os}-${arch}.zip"

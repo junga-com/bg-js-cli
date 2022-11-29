@@ -40,7 +40,14 @@ for (const moduleName of option.modules) {
 // initialize the atom environment if called for
 if (option.atomEnvironment) {
 	const AtomEnvironment = require('atom-environment');
-	window.atom = new AtomEnvironment();
+	const ApplicationDelegate = require('application-delegate');
+	const fsp = require('fs-plus');
+	global.atom = new AtomEnvironment({
+		applicationDelegate: new ApplicationDelegate()
+	});
+	atom.initialize({
+		configDirPath: fsp.getHomeDirectory()
+	});
 }
 
 
@@ -85,7 +92,7 @@ if (option.repl) {
 
 	// work-a-round for electron issue [#18872](https://github.com/electron/electron/issues/18872)
 	// we dont use the completer: ... function option because we dont want to reimplement the whole thing
-	let myGlobals = ['global','window','console','electron','mainProcess','mainWindow','consoleWin','consoleMain'];
+	let myGlobals = ['global','window','module','console','electron','mainProcess','mainWindow','consoleWin','consoleMain'];
 	let builtinCompleter = repl.completer;
 	repl.completer = (line, callback)=>{
 		if (/^[^ .]*$/.test(line))
@@ -128,6 +135,7 @@ global, module, require, ... : the standard node environment
 		}.bind(repl)
 	});
 }
+
 
 // load the user provided jsmodule if provided
 if (option.scriptName) {
